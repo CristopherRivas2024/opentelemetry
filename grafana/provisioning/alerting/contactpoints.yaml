@@ -1,0 +1,23 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: "default-email"
+    receivers:
+      - uid: "default-email-receiver"
+        type: email
+        settings:
+          addresses: "${GF_ALERTING_CONTACT_EMAIL}"
+          singleEmail: false
+          subject: "[Conbiz Observability] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }})"
+          message: |
+            {{ range .Alerts }}
+            Status: {{ .Status }}
+            Alert: {{ .Labels.alertname }}
+            Severity: {{ .Labels.severity }}
+            Service: {{ .Labels.service_name }}
+            Summary: {{ .Annotations.summary }}
+            Description: {{ .Annotations.description }}
+            Started: {{ .StartsAt }}
+            {{ end }}
+        disableResolveMessage: false

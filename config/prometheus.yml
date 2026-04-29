@@ -19,3 +19,13 @@ scrape_configs:
     static_configs:
       - targets: ["grafana:3000"]
     metrics_path: /metrics
+
+  # n8n /metrics endpoint (external server)
+  # Requires: N8N_METRICS=true on the n8n instance, network reachability,
+  # and N8N_HOST_IP defined in this stack's environment.
+  # Uncomment and set the IP when ready. See docs/n8n-integration.md.
+  # - job_name: "n8n"
+  #   static_configs:
+  #     - targets: ["<n8n-host-ip>:5678"]
+  #   metrics_path: /metrics
+  #   scheme: http

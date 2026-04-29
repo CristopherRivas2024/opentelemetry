@@ -1,0 +1,192 @@
+apiVersion: 1
+
+groups:
+  # ─────────────────────────────────────────────
+  # Infrastructure — observability stack health
+  # ─────────────────────────────────────────────
+  - orgId: 1
+    name: "infra-health"
+    folder: "Conbiz Alerts"
+    interval: 1m
+    rules:
+      - uid: "alert-collector-down"
+        title: "OpenTelemetry Collector is DOWN"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: "prometheus"
+            model:
+              expr: 'up{job="otel-gateway"}'
+              instant: true
+              refId: "A"
+          - refId: "C"
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator: { params: [1], type: "lt" }
+                  operator: { type: "and" }
+                  query: { params: ["C"] }
+                  reducer: { type: "last" }
+                  type: "query"
+              refId: "C"
+        noDataState: "Alerting"
+        execErrState: "Alerting"
+        for: "2m"
+        labels:
+          severity: "critical"
+          component: "collector"
+        annotations:
+          summary: "OTel Collector unreachable"
+          description: "Prometheus cannot scrape otel-gateway:8888. The whole telemetry pipeline is down."
+
+      - uid: "alert-prometheus-target-down"
+        title: "Backend service DOWN"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: "prometheus"
+            model:
+              expr: 'up{job=~"grafana|otel-gateway"}'
+              instant: true
+              refId: "A"
+          - refId: "C"
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator: { params: [1], type: "lt" }
+                  operator: { type: "and" }
+                  query: { params: ["C"] }
+                  reducer: { type: "last" }
+                  type: "query"
+              refId: "C"
+        noDataState: "Alerting"
+        execErrState: "Alerting"
+        for: "2m"
+        labels:
+          severity: "critical"
+          component: "infra"
+        annotations:
+          summary: "Backend {{ $labels.job }} is DOWN"
+          description: "Prometheus has not scraped {{ $labels.job }} for 2 minutes."
+
+      - uid: "alert-collector-export-failures"
+        title: "Collector is FAILING to export telemetry"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: "prometheus"
+            model:
+              expr: 'sum(rate(otelcol_exporter_send_failed_spans[5m])) + sum(rate(otelcol_exporter_send_failed_log_records[5m])) + sum(rate(otelcol_exporter_send_failed_metric_points[5m]))'
+              refId: "A"
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator: { params: [0], type: "gt" }
+                  operator: { type: "and" }
+                  query: { params: ["C"] }
+                  reducer: { type: "last" }
+                  type: "query"
+              refId: "C"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "5m"
+        labels:
+          severity: "warning"
+          component: "collector"
+        annotations:
+          summary: "OTel Collector export failures"
+          description: "The collector is failing to send telemetry to one or more backends (Tempo/Loki/Prometheus). Check otel-gateway logs."
+
+  # ─────────────────────────────────────────────
+  # Service-level — RED metrics from spanmetrics
+  # ─────────────────────────────────────────────
+  - orgId: 1
+    name: "service-red"
+    folder: "Conbiz Alerts"
+    interval: 1m
+    rules:
+      - uid: "alert-service-error-rate"
+        title: "Service error rate > 5%"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: "prometheus"
+            model:
+              expr: |
+                100 *
+                sum by (service_name) (rate(traces_spanmetrics_calls_total{status_code="STATUS_CODE_ERROR"}[5m]))
+                /
+                sum by (service_name) (rate(traces_spanmetrics_calls_total[5m]))
+              refId: "A"
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator: { params: [5], type: "gt" }
+                  operator: { type: "and" }
+                  query: { params: ["C"] }
+                  reducer: { type: "last" }
+                  type: "query"
+              refId: "C"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "5m"
+        labels:
+          severity: "warning"
+          component: "service"
+        annotations:
+          summary: "{{ $labels.service_name }}: error rate {{ $values.A | humanizePercentage }}"
+          description: "Service {{ $labels.service_name }} has error rate above 5% for 5 minutes."
+
+      - uid: "alert-service-latency-p95"
+        title: "Service p95 latency > 1s"
+        condition: "C"
+        data:
+          - refId: "A"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: "prometheus"
+            model:
+              expr: |
+                histogram_quantile(0.95,
+                  sum by (le, service_name) (rate(traces_spanmetrics_latency_bucket[5m]))
+                )
+              refId: "A"
+          - refId: "C"
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: "__expr__"
+            model:
+              type: "threshold"
+              expression: "A"
+              conditions:
+                - evaluator: { params: [1], type: "gt" }
+                  operator: { type: "and" }
+                  query: { params: ["C"] }
+                  reducer: { type: "last" }
+                  type: "query"
+              refId: "C"
+        noDataState: "OK"
+        execErrState: "Error"
+        for: "10m"
+        labels:
+          severity: "warning"
+          component: "service"
+        annotations:
+          summary: "{{ $labels.service_name }}: p95 latency {{ $values.A }}s"
+          description: "Service {{ $labels.service_name }} p95 latency exceeded 1s for 10 minutes. Adjust threshold per service if needed."
