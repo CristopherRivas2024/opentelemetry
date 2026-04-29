@@ -1,0 +1,26 @@
+# Gentleman Guardian Angel Configuration
+# https://github.com/your-org/gga
+
+# AI Provider (required)
+PROVIDER="claude"
+
+# File patterns to include in review (comma-separated)
+# Observability stack: Compose YAML, OTel/Loki/Tempo/Prometheus configs,
+# Grafana provisioning (datasources/dashboards/alerts), shell, Makefile, env templates
+FILE_PATTERNS="*.yml,*.yaml,*.json,*.env.example,Dockerfile*,*.sh,Makefile,config/**,grafana/**,telemetry/**,scripts/**"
+
+# File patterns to exclude from review (comma-separated)
+# Never review .env itself (contains secrets) or lockfiles
+EXCLUDE_PATTERNS=".env,*.lock,grafana/provisioning/**/*.lock"
+
+# File containing code review rules
+RULES_FILE="AGENTS.md"
+
+# Strict mode: fail if AI response is ambiguous
+STRICT_MODE="true"
+
+# Timeout in seconds for AI provider response
+TIMEOUT="300"
+
+# Base branch for --pr-mode (auto-detects main/master/develop if empty)
+# PR_BASE_BRANCH="main"

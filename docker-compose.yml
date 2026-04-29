@@ -1,0 +1,158 @@
+# Central Observability Stack
+# Services: otel-gateway, tempo, loki, prometheus, grafana
+#
+# Usage:
+#   cp .env.example .env    # fill in secrets
+#   docker compose up -d
+#   open http://localhost:3000
+
+name: observability
+
+networks:
+  observability:
+    driver: bridge
+
+volumes:
+  tempo-data:
+  loki-data:
+  prometheus-data:
+  grafana-data:
+
+services:
+  # ──────────────────────────────────────────────────────────
+  # OpenTelemetry Collector — Gateway
+  # Receives OTLP signals from all services and routes them
+  # to Tempo (traces), Loki (logs), Prometheus (metrics).
+  # ──────────────────────────────────────────────────────────
+  otel-gateway:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    container_name: otel-gateway
+    restart: unless-stopped
+    ports:
+      # OTLP HTTP — external (services send here)
+      - "0.0.0.0:4318:4318"
+      # OTLP gRPC — internal only
+      - "127.0.0.1:4317:4317"
+      # Collector self-metrics (scraped by Prometheus)
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - ./config/otel-collector-gateway.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ──────────────────────────────────────────────────────────
+  # Tempo — Distributed tracing backend
+  # ──────────────────────────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.7.0
+    container_name: tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    ports:
+      # Tempo HTTP API — internal only
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - tempo-data:/var/tempo
+      - ./config/tempo.yaml:/etc/tempo/config.yaml:ro
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ──────────────────────────────────────────────────────────
+  # Loki — Log aggregation backend
+  # ──────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.4.0
+    container_name: loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/config.yaml"]
+    ports:
+      # Loki HTTP API — internal only
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - loki-data:/loki
+      - ./config/loki.yaml:/etc/loki/config.yaml:ro
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ──────────────────────────────────────────────────────────
+  # Prometheus — Metrics backend
+  # ──────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v3.2.0
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-remote-write-receiver"
+      - "--web.enable-lifecycle"
+    ports:
+      # Prometheus UI — internal only
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "-O", "/dev/null", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ──────────────────────────────────────────────────────────
+  # Grafana — Visualization and alerting
+  # ──────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.5.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      # Grafana UI — external
+      - "0.0.0.0:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-changeme}
+      - GF_FEATURE_TOGGLES_ENABLE=traceToLogs correlations
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+    depends_on:
+      - tempo
+      - loki
+      - prometheus
+    networks:
+      - observability
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s

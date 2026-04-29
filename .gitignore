@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────
+# Secrets & local environment
+# ─────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# ─────────────────────────────────────────────
+# Local data / runtime artifacts
+# (named docker volumes live in docker, not here,
+#  but bind mounts or local exports land here)
+# ─────────────────────────────────────────────
+data/
+tmp/
+*.log
+logs/
+
+# ─────────────────────────────────────────────
+# OS
+# ─────────────────────────────────────────────
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.fuse_hidden*
+.Trash-*
+
+# ─────────────────────────────────────────────
+# Editors / IDEs
+# ─────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.bak
+*~
+.history/
+
+# ─────────────────────────────────────────────
+# Claude Code / agent local state
+# (skill-registry.md is committed; ignore everything else under .atl)
+# ─────────────────────────────────────────────
+.atl/*
+!.atl/skill-registry.md
+.claude/settings.local.json
+
+# ─────────────────────────────────────────────
+# Misc
+# ─────────────────────────────────────────────
+*.tmp
+*.tar
+*.tgz
+*.zip
