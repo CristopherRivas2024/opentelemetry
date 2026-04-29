@@ -1,7 +1,7 @@
 # Central Observability Stack — Makefile
 # Requires: docker compose v2, curl
 
-.PHONY: up down logs status test-ingest
+.PHONY: up down logs status test-ingest backup restore
 
 ## up: Start all observability services in the background
 up:
@@ -18,6 +18,18 @@ logs:
 ## status: Show running containers and their health status
 status:
 	docker compose ps
+
+## backup: Snapshot the 4 named volumes into ${BACKUP_DIR} (retain ${BACKUP_RETAIN} per volume)
+backup:
+	@bash scripts/backup.sh
+
+## restore: Restore a tarball into a single named volume — make restore TAR=<path> VOL=<name> [FORCE=1]
+restore:
+	@if [ -z "$(TAR)" ] || [ -z "$(VOL)" ]; then \
+	  printf "Usage: make restore TAR=<path> VOL=<volume-name> [FORCE=1]\n" >&2; \
+	  exit 1; \
+	fi
+	@bash scripts/restore.sh $(if $(FORCE),--force) "$(TAR)" "$(VOL)"
 
 ## test-ingest: Send a minimal OTLP trace payload to the gateway and verify HTTP 200
 test-ingest:
