@@ -230,9 +230,9 @@ services:
     container_name: otel-gateway
     restart: unless-stopped
     ports:
-      - "0.0.0.0:4318:4318"
-      - "127.0.0.1:4317:4317"
-      - "127.0.0.1:8888:8888"
+      - "0.0.0.0:${OTEL_OTLP_HTTP_PORT:-4318}:4318"
+      - "127.0.0.1:${OTEL_OTLP_GRPC_PORT:-4317}:4317"
+      - "127.0.0.1:${OTEL_METRICS_PORT:-8888}:8888"
     configs:
       - source: otel_gateway_config
         target: /etc/otelcol-contrib/config.yaml
@@ -261,7 +261,7 @@ services:
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/config.yaml"]
     ports:
-      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:${TEMPO_HTTP_PORT:-3200}:3200"
     volumes:
       - tempo-data:/var/tempo
     configs:
@@ -285,7 +285,7 @@ services:
     restart: unless-stopped
     command: ["-config.file=/etc/loki/config.yaml"]
     ports:
-      - "127.0.0.1:3100:3100"
+      - "127.0.0.1:${LOKI_HTTP_PORT:-3100}:3100"
     volumes:
       - loki-data:/loki
     configs:
@@ -313,7 +313,7 @@ services:
       - "--web.enable-remote-write-receiver"
       - "--web.enable-lifecycle"
     ports:
-      - "127.0.0.1:9090:9090"
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - prometheus-data:/prometheus
     configs:
@@ -340,7 +340,7 @@ services:
     container_name: grafana
     restart: unless-stopped
     ports:
-      - "0.0.0.0:3000:3000"
+      - "0.0.0.0:${GRAFANA_PORT:-3000}:3000"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
