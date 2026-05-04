@@ -219,6 +219,49 @@ configs:
             - targets: ["grafana:3000"]
           metrics_path: /metrics
 
+  # Grafana datasources — simplified inline version.
+  # Cross-link templates (Tempo<->Loki, derived fields, service-map vars)
+  # are intentionally omitted here: Compose interprets ${...} as env-var
+  # substitution inside content blocks, which collides with Grafana's own
+  # variable syntax. Full provisioning (datasources w/ cross-links +
+  # dashboards + alerts) is pending a separate migration.
+  grafana_datasources_config:
+    content: |
+      apiVersion: 1
+
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          uid: prometheus
+          access: proxy
+          url: http://prometheus:9090
+          isDefault: true
+          editable: false
+          jsonData:
+            timeInterval: "15s"
+
+        - name: Tempo
+          type: tempo
+          uid: tempo
+          access: proxy
+          url: http://tempo:3200
+          isDefault: false
+          editable: false
+          jsonData:
+            httpMethod: GET
+            serviceMap:
+              datasourceUid: prometheus
+            nodeGraph:
+              enabled: true
+
+        - name: Loki
+          type: loki
+          uid: loki
+          access: proxy
+          url: http://loki:3100
+          isDefault: false
+          editable: false
+
 services:
   # ──────────────────────────────────────────────────────────
   # OpenTelemetry Collector — Gateway
@@ -330,10 +373,10 @@ services:
 
   # ──────────────────────────────────────────────────────────
   # Grafana — Visualization and alerting
-  # NOTE: provisioning still uses a bind mount because it's a directory
-  # tree (datasources/, dashboards/, alerting/) with multiple files.
-  # If Portainer doesn't sync this dir, Grafana will start empty and you'll
-  # need to provision via UI or migrate provisioning to configs too.
+  # Datasources are provisioned via inline `configs:` (simplified, no
+  # cross-link templates). Dashboards and alert rules are NOT provisioned
+  # yet — pending the full migration of grafana/provisioning/. Until then
+  # add them via UI or do another change to inline them.
   # ──────────────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.5.0
@@ -343,7 +386,9 @@ services:
       - "0.0.0.0:${GRAFANA_PORT:-3000}:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    configs:
+      - source: grafana_datasources_config
+        target: /etc/grafana/provisioning/datasources/datasources.yaml
     environment:
       - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-changeme}
